@@ -1,0 +1,59 @@
+---
+title: "Untitled"
+author: "Eli Horner"
+date: "2025-03-26"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Part 1
+
+```{r}
+library(geodata)
+library(sp)
+library(spdep)
+library(spmodel)
+ncdata=read.csv("NCcounty2024data.csv",header=T)
+load("nc_counties.Rdata")
+```
+
+I'm going to look at population change since 2014 and analyze is there is spatial dependence.
+
+```{r}
+nc_counties$pop_change = ncdata$Population.Change.Since.2014
+library(viridis)
+library(ggplot2)
+colpal <- viridis_pal(option = 'magma')
+pop_range <- range(nc_counties$pop_change)
+# ggplot(nc_counties) + geom_sf(fill= nc_counties$pop_change) +
+#   theme_bw() + ggtitle('Population change by county (2024 vs 2014)') +
+#   scale_fill_gradientn(name = 'Pop Change', colours = colpal, na.value = 'black', limits = pop_range)
+spplot(nc_counties, 'pop_change')
+```
+
+Visually, we see evidence of some clear spatial patterns. Let's calculate a Moran's I and Geary's C to test for spatial dependence. First, we define our neighborhood. We will use queen neighborhoods, considering corner borders to be borders. We use this neighborhood to define our proximity matrix, which we construct as a W matrix (rows normalized).
+
+```{r}
+nc_nb = poly2nb(nc_counties)
+
+W = nb2listw(nc_nb, style='W')
+```
+
+Now, we can perfrom our Moran's I test with this neighborhood.
+
+```{r}
+moran.test(nc_counties$pop_change, listw = W, randomisation = FALSE, alternative = 'greater')
+```
+
+We find our Moran's I statistic to be 0.2303, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value  of 0.0001. This result indicates positive spatial dependence, indicating that nearby counties have more similar population changes over the past decade. Now, let's check this results by calculating Geary's C.
+
+```{r}
+geary.test(nc_counties$pop_change, listw = W, randomisation = FALSE, alternative = 'greater')
+```
+
+We find the Geary's C statistic to be 0.7912, which is significantly different than our expectation under normality of 1 with a p-value of 0.0012. This result also indicates positive spatial dependence. 
+
+Overall, we can conclude that there is positive spatial dependence in the population change in NC counties since 2014.
