@@ -124,23 +124,11 @@ corrplot(cor(numeric_vars, use = "complete.obs"),
          tl.cex = 0.5)  # try 0.4 or 0.3 if needed
 ```
 
-Based on the heat map, some interesting variables might be (for select topics):
-- Population.Change.Since.2014 (urbanization, migration, policy)
-- Food.Insecurity.2022 (health equity & access)
-- Overdose.Deaths.Per.100.000 (public health)
-- Percent.Children.in.Poverty (long-term socioeconomic outcomes)
+The heat map revelealed several potentially interesting candidates for our target variable. Food Insecurity seemed interesting with respect to health equity & access, whereas overdose deaths per 100,000 seemed to be interesting for studying public health. Population change since 2014 was also considered with respect to understanding urbanization, migration, and public policy,while percent of children in poverty tracks long-term socioeconomic outcomes.
 
-Again using the heatmap, it looks like the best 3 predictors are: 
-- If we use Population.Change.Since.2014 as our target, then predictors could be Median.Age, Broadband.Internet.Access, Poverty.Rate, Educational.Attainment
-(Since young, educated areas with internet might grow more). 
 
-- For Food.Insecurity.2022 as the target, we could look at Percent.Children.in.Poverty, Adults.Without.a.High.School.Diploma, Uninsured.Residents.2020 etc. (due to the link between poverty and food insecurity, education and food scarcity, and lack of healthcare and food insecurity).
+Understanding the shape of our distribution helps us understand what type of model we should use, as well as helps in visually assesing the normality and skewness. We would also like to avoid having too many outliers dominating the model, and also to decide if a transformation of the target variable is needed. For this, we decided to examine the histograms of each of these variables under consideration. 
 
-- If we use Overdose.Deaths.Per.100.000 as the target, we could look at things like Population Change since 2014, Educational Attainment, Veteran Population (structural vulnerabilities).
-
-- If we look at Percent.Children.in.Poverty, we might look at things like: Unemployment.Rate, Food.Insecurity, Educational.Attainment, Average.Weekly.Wage (since these speak to parental resources and economic stability). 
-
-Let's take a look at histograms since understanding the shape of our distribution will help us understand what type of model we should use (linear or poisson, etc), help us avoid too many outliers dominating the model, decide if a transformation of the target variable is needed, and to visually asses normality and skewness.
 
 ```{r}
 # Set up 2x2 grid of plots
@@ -175,16 +163,9 @@ par(mfrow = c(1, 1))
 
 ```
 
-We decided to go with Overdose Deaths.
-
-Overdose deaths are heavily spatially structured and certain regions (like Appalachia, parts of the South, or the Rust Belt) have had historically higher rates. That makes it a perfect candidate for a spatial regression model.
-
-The right skew also gives us the challenge of transforming or modeling a non-normal target — often the more statistically interesting and policy-relevant scenario. You might log-transform the response or try a Poisson or negative binomial model depending on how it's measured.
-
-Furthermore, modeling overdose deaths allows us to make a policy case — identifying predictors like poverty, unemployment, healthcare access, or education could point to real solutions. It’s a meaningful and timely topic.
 
 
-Even after controlling for variables like poverty or population change, we’ll probably have leftover spatial structure — so your spatial dependence test (e.g., Moran’s I on residuals) will likely be fruitful and interesting.
+After a thorough analysis of the correlation plot and histograms, we chose overdose deaths as our target variable of interest. Overdose deaths are heavily spatially structured and certain regions (like Appalachia, parts of the South, or the Rust Belt) have had historically higher rates. That makes it a perfect candidate for a spatial regression model. Furthermore, the right skew also gives us the challenge of transforming or modeling a non-normal target — often the more statistically interesting and policy-relevant scenario.  Studying overdose deaths allows us to make a policy case — identifying predictors like poverty, unemployment, healthcare access, or education could point to real solutions. It’s a meaningful and timely topic. 
 
 We can test for spatial dependence in Overdose Death rate using a Moran's I test.
 
@@ -194,6 +175,9 @@ moran.test(nc_counties$od, listw = Wlist, randomisation = FALSE, alternative = '
 ```
 
 We find our Moran's I to be 0.2025 with an associated p-value of 0.0006, so we have evidence of significant spatial dependence. 
+
+Finally, we considered covariates based on the heat map, searching for variables that had stronger correlations with respect to overdose deaths. Covariates that appeared to fit this criteria included the veteran population, educational attainment, and population change since 2014. We also considered uninsured population, food insecurity, and adults without a high school diploma as other potentially interesting covariates that may correspond to overdose deaths. 
+
 
 ### Model Building
 
