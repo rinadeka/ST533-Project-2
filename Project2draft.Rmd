@@ -28,19 +28,16 @@ library(tidyverse)
 library(corrplot)
 library(tinytex)
 library(ggcorrplot)
+library(knitr)
 ncdata=read.csv("NCcounty2024data.csv",header=T)
 load("nc_counties.Rdata")
 ```
-
-### Population Change since 2014
-
-First, let's look at population change since 2014 and analyze is there is spatial dependence.
 
 ```{r}
 nc_counties$pop_change = ncdata$Population.Change.Since.2014
 ```
 
-Visually, we see evidence of some clear spatial patterns. Let's calculate a Moran's I and Geary's C to test for spatial dependence. First, we define our neighborhood. We will use queen neighborhoods, considering corner borders to be borders. We use this neighborhood to define our proximity matrix, which we construct as a W matrix (rows normalized).
+We will calculate a Moran's I and Geary's C to test for spatial dependence for each variable. First, we define our neighborhood. We will use queen neighborhoods, considering corner borders to be borders. We use this neighborhood to define our proximity matrix, which we construct as a W matrix (rows normalized).
 
 ```{r}
 nc_nb = poly2nb(nc_counties)
@@ -49,66 +46,59 @@ Wlist = nb2listw(nc_nb, style='W')
 Wlist.sym = similar.listw(Wlist)
 ```
 
-Now, we can perform our Moran's I test with this neighborhood.
 
 ```{r, results='hide'}
 moran.test(nc_counties$pop_change, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-We find our Moran's I statistic to be 0.2303, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 0.0001. This result indicates positive spatial dependence, indicating that nearby counties have more similar population changes over the past decade. Now, let's check this results by calculating Geary's C.
-
 ```{r, results='hide'}
 geary.test(nc_counties$pop_change, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
-
-We find the Geary's C statistic to be 0.7912, which is significantly different than our expectation under normality of 1 with a p-value of 0.0012. This result also indicates positive spatial dependence. 
-
-Overall, we can conclude that there is positive spatial dependence in the population change in NC counties since 2014.
-
-### Median Age
-
-Let's look at median age. We can check for spatial dependence using the Moran's I test and the Geary's C test.
 
 ```{r, results='hide'}
 nc_counties$food = ncdata$Food.Insecurity.2022
 moran.test(nc_counties$food, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-We find our Moran's I statistic to be 0.4210, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 1.9e-11. This result indicates positive spatial dependence, indicating that nearby counties have more similar median ages. Now, let's check this result by calculating Geary's C.
-
 ```{r, results='hide'}
 geary.test(nc_counties$food, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-We find the Geary's C statistic to be 0.5928, which is significantly different than our expectation under normality of 1 with a p-value of 1.7e-9. This result also indicates positive spatial dependence. 
-
-Overall, we can conclude that there is positive spatial dependence in median age in NC counties.
-
-### Opportunity Youth
-
-Let's look at opportunity youth in 2022. We can check for spatial dependence using the Moran's I test and the Geary's C test.
 
 ```{r, results='hide'}
 nc_counties$opp22 = ncdata$Opportunity.Youth.2022
 moran.test(nc_counties$opp22, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-We find our Moran's I statistic to be 0.4246, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 1.3e-11. This result indicates positive spatial dependence, indicating that nearby counties have more similar percentage of opportunity youth in 2022. Now, let's check this result by calculating Geary's C.
 
 ```{r, results='hide'}
 geary.test(nc_counties$opp22, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-We find the Geary's C statistic to be 0.5560, which is significantly different than our expectation under normality of 1 with a p-value of 4.849e-11. This result also indicates positive spatial dependence. 
+Here is a table of our test results. As we can see, we find significant positive spatial dependence in all of the variables we looked at.
 
-Overall, we can conclude that there is positive spatial dependence in median age in NC counties.
+```{r results='asis', echo=FALSE, message=FALSE}
+# Create a data frame of the results
+results <- data.frame(
+  Variable = c("Population Change", "Population Change",
+               "Food Insecurity 2022", "Food Insecurity 2022",
+               "Opportunity Youth 2022", "Opportunity Youth 2022"),
+  Test = c("Moran's I", "Geary's C", "Moran's I", "Geary's C", "Moran's I", "Geary's C"),
+  Statistic = c(0.2303, 0.7912, 0.4210, 0.5928, 0.4246, 0.5560),
+  Expectation = c(-0.0101, 1.0000, -0.0101, 1.0000, -0.0101, 1.000),
+  `P-value` = c(1.143e-04, 1.170e-03, 1.929e-11, 1.471e-09, 1.333e-11, 4.849e-11)
+)
+
+# Print table
+kable(results, caption = "Spatial Autocorrelation Test Results for Selected Indicators", digits = 4)
+
+```
 
 ## Part 2
 
 For this section, we will regress one variable on some of the other variables in the data set.
 
 Let's start by choosing our variable.
-
 
 ```{r}
 # Convert to sf object before merge
@@ -132,17 +122,6 @@ corrplot(cor(numeric_vars, use = "complete.obs"),
          method = "color",
          type = "upper",
          tl.cex = 0.5)  # try 0.4 or 0.3 if needed
-```
-
-```{r}
-corr_matrix <- cor(numeric_vars, use = "complete.obs")
-
-ggcorrplot(corr_matrix,
-           lab = TRUE,
-           type = "upper",
-           lab_size = 2,
-           tl.cex = 6,
-           colors = c("blue", "white", "red"))
 ```
 
 Based on the heat map, some interesting variables might be (for select topics):
