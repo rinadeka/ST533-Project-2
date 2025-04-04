@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 ## Introduction
 
-In this project, we first analyze spatial dependence in 3 variables of interest and then make predictions of a 4th variable. For this analysis, we chose Overdose Deaths per 100,000 as the response variable due to its direct relevance to public health concerns, particularly in the context of the opioid crisis. Overdose deaths are a pressing issue in many regions, and understanding the factors that contribute to them is critical for effective policy and intervention strategies
+In this project, we first analyze spatial dependence in 3 variables of interest and then make predictions of a 4th variable. For this analysis, we chose Overdose Deaths per 100,000 as the response variable due to its direct relevance to public health concerns, particularly in the context of the opioid crisis. Overdose deaths are a pressing issue in many regions, and understanding the factors that contribute to them is critical for effective policy and intervention strategies.
 
 ## Part 1
 
@@ -38,14 +38,6 @@ First, let's look at population change since 2014 and analyze is there is spatia
 
 ```{r}
 nc_counties$pop_change = ncdata$Population.Change.Since.2014
-library(viridis)
-library(ggplot2)
-colpal <- viridis_pal(option = 'magma')
-pop_range <- range(nc_counties$pop_change)
-# ggplot(nc_counties) + geom_sf(fill= nc_counties$pop_change) +
-#   theme_bw() + ggtitle('Population change by county (2024 vs 2014)') +
-#   scale_fill_gradientn(name = 'Pop Change', colours = colpal, na.value = 'black', limits = pop_range)
-spplot(nc_counties, 'pop_change')
 ```
 
 Visually, we see evidence of some clear spatial patterns. Let's calculate a Moran's I and Geary's C to test for spatial dependence. First, we define our neighborhood. We will use queen neighborhoods, considering corner borders to be borders. We use this neighborhood to define our proximity matrix, which we construct as a W matrix (rows normalized).
@@ -59,13 +51,13 @@ Wlist.sym = similar.listw(Wlist)
 
 Now, we can perform our Moran's I test with this neighborhood.
 
-```{r}
+```{r, results='hide'}
 moran.test(nc_counties$pop_change, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
 We find our Moran's I statistic to be 0.2303, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 0.0001. This result indicates positive spatial dependence, indicating that nearby counties have more similar population changes over the past decade. Now, let's check this results by calculating Geary's C.
 
-```{r}
+```{r, results='hide'}
 geary.test(nc_counties$pop_change, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
@@ -75,43 +67,39 @@ Overall, we can conclude that there is positive spatial dependence in the popula
 
 ### Median Age
 
-Let's look at median age. Here is a plot of median age by county in 2022.
+Let's look at median age. We can check for spatial dependence using the Moran's I test and the Geary's C test.
 
-```{r}
-nc_counties$age=ncdata$Median.Age
-spplot(nc_counties,"age")
+```{r, results='hide'}
+nc_counties$food = ncdata$Food.Insecurity.2022
+moran.test(nc_counties$food, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-Now, we can check for spatial dependence using the Moran's I test and the Geary's C test.
+We find our Moran's I statistic to be 0.4210, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 1.9e-11. This result indicates positive spatial dependence, indicating that nearby counties have more similar median ages. Now, let's check this result by calculating Geary's C.
 
-```{r}
-moran.test(nc_counties$age, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```{r, results='hide'}
+geary.test(nc_counties$food, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-We find our Moran's I statistic to be 0.1440, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 0.0091. This result indicates positive spatial dependence, indicating that nearby counties have more similar median ages. Now, let's check this result by calculating Geary's C.
+We find the Geary's C statistic to be 0.5928, which is significantly different than our expectation under normality of 1 with a p-value of 1.7e-9. This result also indicates positive spatial dependence. 
+
+Overall, we can conclude that there is positive spatial dependence in median age in NC counties.
 
 ### Opportunity Youth
 
-Let's look at opportunity youth in 2022. Here is a plot of opportunity youth by county in 2022.
+Let's look at opportunity youth in 2022. We can check for spatial dependence using the Moran's I test and the Geary's C test.
 
-```{r}
-nc_counties$opp22=ncdata$Opportunity.Youth.2022
-spplot(nc_counties,"opp22")
-```
-
-Now, we can check for spatial dependence using the Moran's I test and the Geary's C test.
-
-```{r}
+```{r, results='hide'}
+nc_counties$opp22 = ncdata$Opportunity.Youth.2022
 moran.test(nc_counties$opp22, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
 We find our Moran's I statistic to be 0.4246, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 1.3e-11. This result indicates positive spatial dependence, indicating that nearby counties have more similar percentage of opportunity youth in 2022. Now, let's check this result by calculating Geary's C.
 
-```{r}
-geary.test(nc_counties$age, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```{r, results='hide'}
+geary.test(nc_counties$opp22, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-We find the Geary's C statistic to be 0.8188, which is significantly different than our expectation under normality of 1 with a p-value of 0.0041. This result also indicates positive spatial dependence. 
+We find the Geary's C statistic to be 0.5560, which is significantly different than our expectation under normality of 1 with a p-value of 4.849e-11. This result also indicates positive spatial dependence. 
 
 Overall, we can conclude that there is positive spatial dependence in median age in NC counties.
 
@@ -163,17 +151,11 @@ Based on the heat map, some interesting variables might be (for select topics):
 - Overdose.Deaths.Per.100.000 (public health)
 - Percent.Children.in.Poverty (long-term socioeconomic outcomes)
 
-We want to pick predictors that are: 
-- Correlated (but not too correlated) with our outcome
-- Interpretable and likely to explain the response
-- Not multicollinear (check pairwise correlation < 0.8 if possible)
-
 Again using the heatmap, it looks like the best 3 predictors are: 
 - If we use Population.Change.Since.2014 as our target, then predictors could be Median.Age, Broadband.Internet.Access, Poverty.Rate, Educational.Attainment
 (Since young, educated areas with internet might grow more). 
 
 - For Food.Insecurity.2022 as the target, we could look at Percent.Children.in.Poverty, Adults.Without.a.High.School.Diploma, Uninsured.Residents.2020 etc. (due to the link between poverty and food insecurity, education and food scarcity, and lack of healthcare and food insecurity).
-
 
 - If we use Overdose.Deaths.Per.100.000 as the target, we could look at things like Population Change since 2014, Educational Attainment, Veteran Population (structural vulnerabilities).
 
@@ -213,53 +195,8 @@ hist(nc_full$Population.Change.Since.2014,
 par(mfrow = c(1, 1))
 
 ```
-Which seems to be the best for the target variable?
 
-For the Food Insecurity target, we have: 
-
-- Distribution: Fairly normal (bell-shaped), centered around ~15–18%.
-
-- Pros: Good for regression — a nice, symmetric target.
-
-- Cons: If you're interested in identifying outliers or extremes, this might not be ideal since it's quite balanced.
-
-- Verdict: Solid choice for standard regression, but not particularly surprising or extreme.
-
-
-
-For Children in Poverty, we have:
-- Distribution: Roughly uniform or slightly bimodal, with a wide spread.
-
-- Pros: Could be interesting for classification (e.g., high vs. low poverty), or exploring clusters.
-
-- Cons: Might be more difficult for regression due to less clear central tendency.
-
-- Verdict: Good for classification or policy-based segmentation.
-
-
-
-For Overdose Deaths, we have: 
-
-- Distribution: Right-skewed, long tail — many counties with low deaths, few with very high rates.
-
-- Pros: Super interesting for prediction. That skew suggests some counties are outliers worth understanding. Great for modeling rare but serious outcomes.
-
-- Cons: Requires care in handling outliers (e.g., log transformation).
-
-- Verdict: Most interesting if your goal is identifying high-risk areas or understanding disparities.
-
-
-For 
-- Distribution: Highly skewed right, many near zero or negative, with a few extreme positives.
-
-- Pros: Could be fascinating to model migration or growth dynamics.
-
-- Cons: Huge range, lots of zeros or small changes — may require normalization or feature engineering.
-
-- Verdict: Also very interesting, but potentially noisier.
-
-
-My personal opinion is that we should go with Overdose Deaths.
+We decided to go with Overdose Deaths.
 
 Overdose deaths are heavily spatially structured and certain regions (like Appalachia, parts of the South, or the Rust Belt) have had historically higher rates. That makes it a perfect candidate for a spatial regression model.
 
@@ -269,6 +206,15 @@ Furthermore, modeling overdose deaths allows us to make a policy case — identi
 
 
 Even after controlling for variables like poverty or population change, we’ll probably have leftover spatial structure — so your spatial dependence test (e.g., Moran’s I on residuals) will likely be fruitful and interesting.
+
+We can test for spatial dependence in Overdose Death rate using a Moran's I test.
+
+```{r, results='hide'}
+nc_counties$od <- ncdata$Overdose.Deaths.Per.100.000
+moran.test(nc_counties$od, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```
+
+We find our Moran's I to be 0.2025 with an associated p-value of 0.0006, so we have evidence of significant spatial dependence. 
 
 ### Model Building
 
@@ -288,7 +234,7 @@ od_lm <- lm(od ~ pop_change + education + veterans, data = nc_counties)
 
 We find the following model: predicted overdose deaths per 100,000 = 3.874 - 2.825e-5 * population change since 2014 - 2.137 * educational attainment + 22.41 * veteran population. This implies that as veteran population increases in a county, so does overdose rate. It also implies that as educational attainment decreases, overdoes rate increases. This effect is smaller than that of veteran population. Finally, we find a tiny effect of population growth since 2014. This effect is also negative, meaning increased population growth implies lower overdose rate. All of these findings make sense conceptually. Our model is not super predictive, and only Veteran Population has a significant effect. Let's check for spatial dependence in our residuals, using the Moran's I test, using the same neighborhood from part 1.
 
-```{r}
+```{r, results='hide'}
 nc_counties$residuals <- od_lm$residuals
 moran.test(nc_counties$residuals, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
