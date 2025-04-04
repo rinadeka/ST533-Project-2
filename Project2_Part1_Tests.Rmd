@@ -1,0 +1,102 @@
+---
+title: "Part 1 3 Variables"
+output: pdf_document
+---
+
+
+This is just for the sake of completeness. 
+```{r}
+library(sp)
+library(spmodel)
+library(sf) 
+library(spdep)
+library(tmap)
+library(corrplot)
+library(readr)
+library(tidyverse)
+library(tinytex)
+library(ggcorrplot)
+
+## Load in the demographic data and county data for North Carolina
+ncdata=read.csv("NCcounty2024data.csv",header=T)
+load("nc_counties.Rdata")
+
+## Plot the counties
+plot(nc_counties)
+## Names of the counties
+nc_counties[[7]]
+## Obtain neighborhoods given the polygons
+nc_neigh=poly2nb(nc_counties)
+
+```
+
+```{r}
+# Convert to sf object before merge
+nc_counties_sf <- st_as_sf(nc_counties)
+
+# Make sure the name matches
+nc_counties_sf$County <- nc_counties_sf$NAME_2
+
+# Now merge
+nc_full <- left_join(nc_counties_sf, ncdata, by = "County")
+
+#Neighborhoods for our analyses
+
+# Define spatial neighbors using Queen's Contiguity
+nc_nb <- poly2nb(nc_counties_sf, queen = TRUE)
+
+
+# Convert to a spatial weights list object
+nc_listw <- nb2listw(nc_nb, style = "W")  
+
+```
+
+
+For Food Insecurity: 
+
+```{r}
+# Moran's I Test (Global Spatial Autocorrelation)
+moran_test_Food <- moran.test(nc_full$Food.Insecurity.2022, nc_listw)
+
+# Geary's C Test (Local Spatial Autocorrelation)
+geary_test_Food <- geary.test(nc_full$Food.Insecurity.2022, nc_listw)
+
+# Print results
+print(moran_test_Food)
+print(geary_test_Food)
+```
+```{r}
+# Moran's I Test (Global Spatial Autocorrelation)
+moran_test_Overdose <- moran.test(nc_full$Overdose.Deaths.Per.100.000, nc_listw)
+
+# Geary's C Test (Local Spatial Autocorrelation)
+geary_test_Overdose <- geary.test(nc_full$Overdose.Deaths.Per.100.000, nc_listw)
+
+# Print results
+print(moran_test_Overdose)
+print(geary_test_Overdose)
+```
+
+```{r}
+# Moran's I Test (Global Spatial Autocorrelation)
+moran_test_Poverty <- moran.test(nc_full$Percent.Children.in.Poverty, nc_listw)
+
+# Geary's C Test (Local Spatial Autocorrelation)
+geary_test_Poverty <- geary.test(nc_full$Percent.Children.in.Poverty, nc_listw)
+
+# Print results
+print(moran_test_Poverty)
+print(geary_test_Poverty)
+```
+
+```{r}
+moran_test_Uninsured <- moran.test(nc_full$Uninsured.Residents.2020, nc_listw)
+
+# Geary's C Test (Local Spatial Autocorrelation)
+geary_test_Uninsured <- geary.test(nc_full$Uninsured.Residents.2020, nc_listw)
+
+# Print results
+print(moran_test_Uninsured)
+print(geary_test_Uninsured)
+```
+
