@@ -1,6 +1,6 @@
 ---
-title: "Untitled"
-author: "Eli Horner"
+title: "Project 2"
+author: "Eli Horner, Jack Andrew, Rina Deka"
 date: "2025-04-04"
 output: pdf_document
 ---
@@ -8,6 +8,11 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
+
+
+## Introduction
+
+In this project, we first analyze spatial dependence in 3 variables of interest and then make predictions of a 4th variable. For this analysis, we chose Overdose Deaths per 100,000 as the response variable due to its direct relevance to public health concerns, particularly in the context of the opioid crisis. Overdose deaths are a pressing issue in many regions, and understanding the factors that contribute to them is critical for effective policy and intervention strategies
 
 ## Part 1
 
@@ -19,6 +24,10 @@ library(sp)
 library(spdep)
 library(spmodel)
 library(spatialreg)
+library(tidyverse)
+library(corrplot)
+library(tinytex)
+library(ggcorrplot)
 ncdata=read.csv("NCcounty2024data.csv",header=T)
 load("nc_counties.Rdata")
 ```
@@ -99,18 +108,167 @@ moran.test(nc_counties$opp22, listw = Wlist, randomisation = FALSE, alternative 
 We find our Moran's I statistic to be 0.4246, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 1.3e-11. This result indicates positive spatial dependence, indicating that nearby counties have more similar percentage of opportunity youth in 2022. Now, let's check this result by calculating Geary's C.
 
 ```{r}
-geary.test(nc_counties$opp22, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+geary.test(nc_counties$age, listw = Wlist, randomisation = FALSE, alternative = 'greater')
 ```
 
-We find the Geary's C statistic to be 0.5560, which is significantly different than our expectation under normality of 1 with a p-value of 4.8e-11. This result also indicates positive spatial dependence. 
+We find the Geary's C statistic to be 0.8188, which is significantly different than our expectation under normality of 1 with a p-value of 0.0041. This result also indicates positive spatial dependence. 
 
-Overall, we can conclude that there is positive spatial dependence in the 2022 percentage of opportunity youth in NC counties.
+Overall, we can conclude that there is positive spatial dependence in median age in NC counties.
 
 ## Part 2
 
 For this section, we will regress one variable on some of the other variables in the data set.
 
-We choose to predict Overdose Deaths with
+Let's start by choosing our variable.
+
+
+```{r}
+# Convert to sf object before merge
+nc_counties_sf <- st_as_sf(nc_counties)
+
+# Make sure the name matches
+nc_counties_sf$County <- nc_counties_sf$NAME_2
+
+# Now merge
+nc_full <- left_join(nc_counties_sf, ncdata, by = "County")
+
+```
+
+```{r}
+numeric_vars <- ncdata %>%
+  select(where(is.numeric))
+
+corr_matrix <- cor(numeric_vars, use = "complete.obs")
+
+corrplot(cor(numeric_vars, use = "complete.obs"),
+         method = "color",
+         type = "upper",
+         tl.cex = 0.5)  # try 0.4 or 0.3 if needed
+```
+
+```{r}
+corr_matrix <- cor(numeric_vars, use = "complete.obs")
+
+ggcorrplot(corr_matrix,
+           lab = TRUE,
+           type = "upper",
+           lab_size = 2,
+           tl.cex = 6,
+           colors = c("blue", "white", "red"))
+```
+
+Based on the heat map, some interesting variables might be (for select topics):
+- Population.Change.Since.2014 (urbanization, migration, policy)
+- Food.Insecurity.2022 (health equity & access)
+- Overdose.Deaths.Per.100.000 (public health)
+- Percent.Children.in.Poverty (long-term socioeconomic outcomes)
+
+We want to pick predictors that are: 
+- Correlated (but not too correlated) with our outcome
+- Interpretable and likely to explain the response
+- Not multicollinear (check pairwise correlation < 0.8 if possible)
+
+Again using the heatmap, it looks like the best 3 predictors are: 
+- If we use Population.Change.Since.2014 as our target, then predictors could be Median.Age, Broadband.Internet.Access, Poverty.Rate, Educational.Attainment
+(Since young, educated areas with internet might grow more). 
+
+- For Food.Insecurity.2022 as the target, we could look at Percent.Children.in.Poverty, Adults.Without.a.High.School.Diploma, Uninsured.Residents.2020 etc. (due to the link between poverty and food insecurity, education and food scarcity, and lack of healthcare and food insecurity).
+
+
+- If we use Overdose.Deaths.Per.100.000 as the target, we could look at things like Population Change since 2014, Educational Attainment, Veteran Population (structural vulnerabilities).
+
+- If we look at Percent.Children.in.Poverty, we might look at things like: Unemployment.Rate, Food.Insecurity, Educational.Attainment, Average.Weekly.Wage (since these speak to parental resources and economic stability). 
+
+Let's take a look at histograms since understanding the shape of our distribution will help us understand what type of model we should use (linear or poisson, etc), help us avoid too many outliers dominating the model, decide if a transformation of the target variable is needed, and to visually asses normality and skewness.
+
+```{r}
+# Set up 2x2 grid of plots
+par(mfrow = c(2, 2))
+
+# Histogram 1: Food Insecurity
+hist(nc_full$Food.Insecurity.2022,
+     main = "Food Insecurity (2022)",
+     xlab = "Percent",
+     col = "skyblue", breaks = 15)
+
+# Histogram 2: Percent Children in Poverty
+hist(nc_full$Percent.Children.in.Poverty,
+     main = "Children in Poverty",
+     xlab = "Percent",
+     col = "goldenrod", breaks = 15)
+
+# Histogram 3: Overdose Deaths Per 100,000 
+hist(nc_full$Overdose.Deaths.Per.100.000 ,
+     main = "Overdose Deaths Per 100,000",
+     xlab = "Percent",
+     col = "firebrick1", breaks = 15)
+
+# Histogram 4: Popluation Change Since 2014
+hist(nc_full$Population.Change.Since.2014,
+     main = "Population Change Since 2014",
+     xlab = "Percent",
+     col = "darkorchid", breaks = 15)
+
+# Reset layout
+par(mfrow = c(1, 1))
+
+```
+Which seems to be the best for the target variable?
+
+For the Food Insecurity target, we have: 
+
+- Distribution: Fairly normal (bell-shaped), centered around ~15–18%.
+
+- Pros: Good for regression — a nice, symmetric target.
+
+- Cons: If you're interested in identifying outliers or extremes, this might not be ideal since it's quite balanced.
+
+- Verdict: Solid choice for standard regression, but not particularly surprising or extreme.
+
+
+
+For Children in Poverty, we have:
+- Distribution: Roughly uniform or slightly bimodal, with a wide spread.
+
+- Pros: Could be interesting for classification (e.g., high vs. low poverty), or exploring clusters.
+
+- Cons: Might be more difficult for regression due to less clear central tendency.
+
+- Verdict: Good for classification or policy-based segmentation.
+
+
+
+For Overdose Deaths, we have: 
+
+- Distribution: Right-skewed, long tail — many counties with low deaths, few with very high rates.
+
+- Pros: Super interesting for prediction. That skew suggests some counties are outliers worth understanding. Great for modeling rare but serious outcomes.
+
+- Cons: Requires care in handling outliers (e.g., log transformation).
+
+- Verdict: Most interesting if your goal is identifying high-risk areas or understanding disparities.
+
+
+For 
+- Distribution: Highly skewed right, many near zero or negative, with a few extreme positives.
+
+- Pros: Could be fascinating to model migration or growth dynamics.
+
+- Cons: Huge range, lots of zeros or small changes — may require normalization or feature engineering.
+
+- Verdict: Also very interesting, but potentially noisier.
+
+
+My personal opinion is that we should go with Overdose Deaths.
+
+Overdose deaths are heavily spatially structured and certain regions (like Appalachia, parts of the South, or the Rust Belt) have had historically higher rates. That makes it a perfect candidate for a spatial regression model.
+
+The right skew also gives us the challenge of transforming or modeling a non-normal target — often the more statistically interesting and policy-relevant scenario. You might log-transform the response or try a Poisson or negative binomial model depending on how it's measured.
+
+Furthermore, modeling overdose deaths allows us to make a policy case — identifying predictors like poverty, unemployment, healthcare access, or education could point to real solutions. It’s a meaningful and timely topic.
+
+
+Even after controlling for variables like poverty or population change, we’ll probably have leftover spatial structure — so your spatial dependence test (e.g., Moran’s I on residuals) will likely be fruitful and interesting.
 
 ### Model Building
 
@@ -126,9 +284,9 @@ nc_counties$education <- ncdata$Educational.Attainment
 nc_counties$od <- ncdata$Overdose.Deaths.Per.100.000
 
 od_lm <- lm(od ~ pop_change + education + veterans, data = nc_counties)
-summary(od_lm)
 ```
-Our model is super predictive, and only Veteran Population has a significant effect. Let's check for spatial dependence in our residuals, using the Moran's I test, using the same neighborhood from part 1.
+
+We find the following model: predicted overdose deaths per 100,000 = 3.874 - 2.825e-5 * population change since 2014 - 2.137 * educational attainment + 22.41 * veteran population. This implies that as veteran population increases in a county, so does overdose rate. It also implies that as educational attainment decreases, overdoes rate increases. This effect is smaller than that of veteran population. Finally, we find a tiny effect of population growth since 2014. This effect is also negative, meaning increased population growth implies lower overdose rate. All of these findings make sense conceptually. Our model is not super predictive, and only Veteran Population has a significant effect. Let's check for spatial dependence in our residuals, using the Moran's I test, using the same neighborhood from part 1.
 
 ```{r}
 nc_counties$residuals <- od_lm$residuals
@@ -144,13 +302,17 @@ W=as.matrix(as_dgRMatrix_listw(Wlist))
 W.sym=as.matrix(as_dgRMatrix_listw(Wlist.sym))
 nc_counties_sf <- st_as_sf(nc_counties)
 od_car <- spautor(od ~ pop_change + education + veterans, data = nc_counties_sf, W = W.sym, spcov_type = 'car')
+
 ```
 
-Now, we will fit using SAR model.
+We find the following model: predicted overdose deaths per 100,000 = 3.829 - 5.202e-5 * population change since 2014 - 1.709 * educational attainment + 20.52 * veteran population. This implies that as veteran population increases in a county, so does overdose rate. It also implies that as educational attainment decreases, overdoes rate increases. This effect is smaller than that of veteran population. Finally, we find a tiny effect of population growth since 2014. This effect is also negative, meaning increased population growth implies lower overdose rate. Now, we will fit using SAR model.
 
 ```{r}
 od_sar <- spautor(od ~ pop_change + education + veterans, data = nc_counties_sf, W = W, spcov_type = 'sar')
+
 ```
+
+We find the following model: predicted overdose deaths per 100,000 = 4.008 - 4.367e-5 * population change since 2014 - 2.158 * educational attainment + 21.09 * veteran population. This implies that as veteran population increases in a county, so does overdose rate. It also implies that as educational attainment decreases, overdoes rate increases. This effect is smaller than that of veteran population. Finally, we find a tiny effect of population growth since 2014. This effect is also negative, meaning increased population growth implies lower overdose rate.
 
 Since the pseudo-R^2 of 0.088 for the SAR model is higher than the CAR model's pseudo-R^2 of 0.086, we will use the SAR model going forward.
 
@@ -165,3 +327,18 @@ spplot(nc_counties, 'od_pred')
 ```
 
 Our model is not very good at predicting drug overdoses, but this seems to be a challenging thing to predict from available data. 
+
+## Discussion
+
+The key aim of our analysis was to identify socio-economic and demographic factors that might
+influence overdose death rates at the county level. We selected the following predictor variables based on their potential connections to health outcomes, specifically overdose mortality.
+
+Population Change: Population growth or decline can be an important indicator of economic and
+social changes within a region. Population decline could signal economic instability, lower
+access to healthcare, or a loss of social support structures, potentially contributing to higher overdose rates. We found this variable not to be significant in our model.
+
+Veteran Population: Veterans are known to face unique health challenges, including mental
+health disorders, substance use issues, and limited access to healthcare. By including the veteran population as a predictor, we aimed to capture this vulnerable group’s potential influence on overdose rates. We found this variable to be the only significant predictor in our model.
+
+Education (Percentage of Adults 25-44 with a secondary degree by 2030): Education is a
+well-established determinant of health. Areas with higher levels of education tend to have lower rates of substance abuse and overdose deaths. Additionally, more educated populations might have stronger community networks, which can provide social support and reduce the risk of overdose. We found this variable not to be significant in our model.
