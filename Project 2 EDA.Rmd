@@ -55,6 +55,9 @@ tm_shape(nc_full) +
 ```
 
 ```{r}
+numeric_vars <- ncdata %>%
+  select(where(is.numeric))
+
 corrplot(cor(numeric_vars, use = "complete.obs"),
          method = "color",
          type = "upper",
