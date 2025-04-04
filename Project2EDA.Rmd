@@ -46,27 +46,7 @@ nc_full <- left_join(nc_counties_sf, ncdata, by = "County")
 ```
 
 
-```{r}
-# First we make sure county names align
-head(nc_counties[[7]])         # county names from earlier
-head(ncdata$County)
 
-# Attacingh names as a column in nc_counties
-nc_counties@data$County <- nc_counties[[7]]
-
-# Merge by county name
-nc_full <- merge(nc_counties, ncdata, by = "County")
-
-# Convert to sf object before merge
-nc_counties_sf <- st_as_sf(nc_counties)
-
-# Make sure the name matches
-nc_counties_sf$County <- nc_counties_sf$NAME_2
-
-# Now merge
-nc_full <- left_join(nc_counties_sf, ncdata, by = "County")
-
-```
 
 ```{r}
 tm_shape(nc_full) +
