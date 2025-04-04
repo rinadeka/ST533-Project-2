@@ -1,0 +1,167 @@
+---
+title: "Untitled"
+author: "Eli Horner"
+date: "2025-04-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+## Part 1
+
+The state of North Carolina collects a lot of data at the county level. Here, we will examine 3 of these variables, namely: Population Change since 2014 (2024), Median Age, and Opportunity Youth (2022).
+
+```{r}
+library(geodata)
+library(sp)
+library(spdep)
+library(spmodel)
+library(spatialreg)
+ncdata=read.csv("NCcounty2024data.csv",header=T)
+load("nc_counties.Rdata")
+```
+
+### Population Change since 2014
+
+First, let's look at population change since 2014 and analyze is there is spatial dependence.
+
+```{r}
+nc_counties$pop_change = ncdata$Population.Change.Since.2014
+library(viridis)
+library(ggplot2)
+colpal <- viridis_pal(option = 'magma')
+pop_range <- range(nc_counties$pop_change)
+# ggplot(nc_counties) + geom_sf(fill= nc_counties$pop_change) +
+#   theme_bw() + ggtitle('Population change by county (2024 vs 2014)') +
+#   scale_fill_gradientn(name = 'Pop Change', colours = colpal, na.value = 'black', limits = pop_range)
+spplot(nc_counties, 'pop_change')
+```
+
+Visually, we see evidence of some clear spatial patterns. Let's calculate a Moran's I and Geary's C to test for spatial dependence. First, we define our neighborhood. We will use queen neighborhoods, considering corner borders to be borders. We use this neighborhood to define our proximity matrix, which we construct as a W matrix (rows normalized).
+
+```{r}
+nc_nb = poly2nb(nc_counties)
+
+Wlist = nb2listw(nc_nb, style='W')
+Wlist.sym = similar.listw(Wlist)
+```
+
+Now, we can perform our Moran's I test with this neighborhood.
+
+```{r}
+moran.test(nc_counties$pop_change, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```
+
+We find our Moran's I statistic to be 0.2303, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 0.0001. This result indicates positive spatial dependence, indicating that nearby counties have more similar population changes over the past decade. Now, let's check this results by calculating Geary's C.
+
+```{r}
+geary.test(nc_counties$pop_change, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```
+
+We find the Geary's C statistic to be 0.7912, which is significantly different than our expectation under normality of 1 with a p-value of 0.0012. This result also indicates positive spatial dependence. 
+
+Overall, we can conclude that there is positive spatial dependence in the population change in NC counties since 2014.
+
+### Median Age
+
+Let's look at median age. Here is a plot of median age by county in 2022.
+
+```{r}
+nc_counties$age=ncdata$Median.Age
+spplot(nc_counties,"age")
+```
+
+Now, we can check for spatial dependence using the Moran's I test and the Geary's C test.
+
+```{r}
+moran.test(nc_counties$age, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```
+
+We find our Moran's I statistic to be 0.1440, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 0.0091. This result indicates positive spatial dependence, indicating that nearby counties have more similar median ages. Now, let's check this result by calculating Geary's C.
+
+### Opportunity Youth
+
+Let's look at opportunity youth in 2022. Here is a plot of opportunity youth by county in 2022.
+
+```{r}
+nc_counties$opp22=ncdata$Opportunity.Youth.2022
+spplot(nc_counties,"opp22")
+```
+
+Now, we can check for spatial dependence using the Moran's I test and the Geary's C test.
+
+```{r}
+moran.test(nc_counties$opp22, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```
+
+We find our Moran's I statistic to be 0.4246, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 1.3e-11. This result indicates positive spatial dependence, indicating that nearby counties have more similar percentage of opportunity youth in 2022. Now, let's check this result by calculating Geary's C.
+
+```{r}
+geary.test(nc_counties$opp22, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```
+
+We find the Geary's C statistic to be 0.5560, which is significantly different than our expectation under normality of 1 with a p-value of 4.8e-11. This result also indicates positive spatial dependence. 
+
+Overall, we can conclude that there is positive spatial dependence in the 2022 percentage of opportunity youth in NC counties.
+
+## Part 2
+
+For this section, we will regress one variable on some of the other variables in the data set.
+
+We choose to predict Overdose Deaths with
+
+### Model Building
+
+Let's start by fitting a simple linear regression model.
+
+```{r}
+nc_counties$uninsured <- ncdata$Uninsured.Residents.2020
+nc_counties$no_hs <- ncdata$Adults.Without.a.High.School.Diploma
+nc_counties$food <- ncdata$Food.Insecurity.2021
+nc_counties$income <- ncdata$Per.Capita.Income.2022
+nc_counties$veterans <- ncdata$Veteran.Population
+nc_counties$education <- ncdata$Educational.Attainment
+nc_counties$od <- ncdata$Overdose.Deaths.Per.100.000
+
+od_lm <- lm(od ~ pop_change + education + veterans, data = nc_counties)
+summary(od_lm)
+```
+Our model is super predictive, and only Veteran Population has a significant effect. Let's check for spatial dependence in our residuals, using the Moran's I test, using the same neighborhood from part 1.
+
+```{r}
+nc_counties$residuals <- od_lm$residuals
+moran.test(nc_counties$residuals, listw = Wlist, randomisation = FALSE, alternative = 'greater')
+```
+
+We find our Moran's I statistic to be 0.1709, which is significantly different than our expectation under the assumption of normality of -0.0101 with a p-value of 0.0028. This result indicates positive spatial dependence in our residuals, suggesting we need a model that accounts for spatial dependence.
+
+We will fit both a SAR and CAR model for our spatial dependence. First, let's examine the CAR model.
+
+```{r}
+W=as.matrix(as_dgRMatrix_listw(Wlist))
+W.sym=as.matrix(as_dgRMatrix_listw(Wlist.sym))
+nc_counties_sf <- st_as_sf(nc_counties)
+od_car <- spautor(od ~ pop_change + education + veterans, data = nc_counties_sf, W = W.sym, spcov_type = 'car')
+```
+
+Now, we will fit using SAR model.
+
+```{r}
+od_sar <- spautor(od ~ pop_change + education + veterans, data = nc_counties_sf, W = W, spcov_type = 'sar')
+```
+
+Since the pseudo-R^2 of 0.088 for the SAR model is higher than the CAR model's pseudo-R^2 of 0.086, we will use the SAR model going forward.
+
+### Spatial Map
+
+Here is a map of our model's prediction for overdose death rate in North Carolina counties.
+
+```{r}
+nc_counties$od_pred <- fitted(od_sar)
+
+spplot(nc_counties, 'od_pred')
+```
+
+Our model is not very good at predicting drug overdoses, but this seems to be a challenging thing to predict from available data. 
